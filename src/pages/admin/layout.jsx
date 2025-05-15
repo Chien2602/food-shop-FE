@@ -2,7 +2,7 @@
 
 import { Link, useLocation } from "react-router-dom"
 import { Button } from "@/components/ui/button"
-import { BarChart3, Box, Home, LayoutDashboard, LogOut, Package, Settings, ShoppingCart, Users } from "lucide-react"
+import { Box, Home, LayoutDashboard, LogOut, Package, ShoppingCart, Users } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const sidebarItems = [
@@ -27,19 +27,9 @@ const sidebarItems = [
     icon: Users,
   },
   {
-    title: "Analytics",
-    href: "/admin/analytics",
-    icon: BarChart3,
-  },
-  {
     title: "Categories",
     href: "/admin/categories",
     icon: Box,
-  },
-  {
-    title: "Settings",
-    href: "/admin/settings",
-    icon: Settings,
   },
 ]
 

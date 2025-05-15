@@ -1,80 +1,76 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useNavigate } from "react-router-dom"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { ScrollReveal } from "@/components/ui/scroll-reveal"
 import { FadeIn } from "@/components/ui/fade-in"
-import { CategoryCard } from "@/components/category-card"
 import { Search } from "lucide-react"
-
-// Mock data for categories
-const categories = [
-  {
-    id: 1,
-    name: "Electronics",
-    image: "/placeholder.svg?height=300&width=300",
-    products: 120,
-    description: "Discover the latest gadgets and electronic devices for your home and office.",
-  },
-  {
-    id: 2,
-    name: "Clothing",
-    image: "/placeholder.svg?height=300&width=300",
-    products: 85,
-    description: "Explore our collection of trendy and comfortable clothing for all seasons.",
-  },
-  {
-    id: 3,
-    name: "Footwear",
-    image: "/placeholder.svg?height=300&width=300",
-    products: 64,
-    description: "Step into style with our range of shoes for every occasion.",
-  },
-  {
-    id: 4,
-    name: "Accessories",
-    image: "/placeholder.svg?height=300&width=300",
-    products: 92,
-    description: "Complete your look with our fashionable accessories and jewelry.",
-  },
-  {
-    id: 5,
-    name: "Home & Kitchen",
-    image: "/placeholder.svg?height=300&width=300",
-    products: 78,
-    description: "Transform your living space with our home decor and kitchen essentials.",
-  },
-  {
-    id: 6,
-    name: "Beauty & Personal Care",
-    image: "/placeholder.svg?height=300&width=300",
-    products: 56,
-    description: "Discover premium beauty products and personal care items.",
-  },
-  {
-    id: 7,
-    name: "Sports & Outdoors",
-    image: "/placeholder.svg?height=300&width=300",
-    products: 43,
-    description: "Gear up for your active lifestyle with our sports and outdoor equipment.",
-  },
-  {
-    id: 8,
-    name: "Books & Stationery",
-    image: "/placeholder.svg?height=300&width=300",
-    products: 37,
-    description: "Explore our collection of books, notebooks, and stationery items.",
-  },
-]
+import Cookies from "js-cookie"
+import { usePlayer } from "@/product-provider"
+import { Card, CardContent } from "@/components/ui/card"
 
 export default function CategoriesPage() {
   const [searchTerm, setSearchTerm] = useState("")
+  const [categories, setCategories] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const token = Cookies.get("token")
+  const { setCategory } = usePlayer()
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        setLoading(true)
+        const response = await fetch("http://127.0.0.1:8000/api/categories", {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        })
+        if (!response.ok) {
+          throw new Error("Failed to fetch categories")
+        }
+        const data = await response.json()
+        setCategories(data.data.data || [])
+      } catch (err) {
+        setError(err.message)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchCategories()
+  }, [token])
 
   // Filter categories based on search term
   const filteredCategories = categories.filter((category) =>
-    category.name.toLowerCase().includes(searchTerm.toLowerCase()),
+    category.title.toLowerCase().includes(searchTerm.toLowerCase()),
   )
+
+  if (loading) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center">Loading categories...</div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center text-red-500">Error: {error}</div>
+      </div>
+    )
+  }
+
+  const handleCategoryClick = (category) => {
+    setCategory(category)
+    navigate(`/shop/categories/${category.id}`)
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -106,7 +102,33 @@ export default function CategoriesPage() {
         ) : (
           filteredCategories.map((category, index) => (
             <ScrollReveal key={category.id} delay={index * 0.05}>
-              <CategoryCard category={category} />
+              <Card
+                className="cursor-pointer hover:opacity-80 transition-opacity overflow-hidden"
+                onClick={() => handleCategoryClick(category)}
+              >
+                <div className="relative h-40 w-full">
+                  {category.thumbnail ? (
+                    <img
+                      src={category.thumbnail || "/placeholder.svg"}
+                      alt={category.title}
+                      className="object-cover w-full h-full"
+                    />
+                  ) : (
+                    <div className="h-full w-full bg-muted flex items-center justify-center">
+                      <span className="text-muted-foreground">No image</span>
+                    </div>
+                  )}
+                </div>
+                <CardContent className="p-4">
+                  <h3 className="font-semibold text-lg">{category.title}</h3>
+                  {category.description && (
+                    <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{category.description}</p>
+                  )}
+                  {category.productCount !== undefined && (
+                    <p className="text-sm mt-2">{category.productCount} products</p>
+                  )}
+                </CardContent>
+              </Card>
             </ScrollReveal>
           ))
         )}

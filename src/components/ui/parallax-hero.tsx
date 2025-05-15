@@ -5,6 +5,7 @@ import type React from "react"
 import { useRef } from "react"
 import { motion, useScroll, useTransform } from "framer-motion"
 import { cn } from "@/lib/utils"
+import Banner from "../../assets/banner.jpeg"
 
 interface ParallaxHeroProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode
@@ -35,7 +36,7 @@ export function ParallaxHero({
       <motion.div
         className="absolute inset-0 w-full h-full bg-cover bg-center"
         style={{
-          backgroundImage: `url(${backgroundImage})`,
+          backgroundImage: `url(${Banner})`,
           y,
           opacity,
         }}

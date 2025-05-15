@@ -25,19 +25,9 @@ const sidebarItems = [
     icon: Users,
   },
   {
-    title: "Analytics",
-    href: "/admin/analytics",
-    icon: BarChart3,
-  },
-  {
     title: "Categories",
     href: "/admin/categories",
     icon: Box,
-  },
-  {
-    title: "Settings",
-    href: "/admin/settings",
-    icon: Settings,
   },
 ]
 

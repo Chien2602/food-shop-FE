@@ -10,135 +10,163 @@ import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { ArrowLeft, Download, Mail, Printer, Package, Truck, CheckCircle } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
-
-// Mock order data
-const getOrder = (id) => {
-  return {
-    id: id,
-    date: "2023-05-01",
-    status: "Processing",
-    customer: {
-      name: "John Doe",
-      email: "john.doe@example.com",
-      phone: "+1 (555) 123-4567",
-    },
-    shippingAddress: {
-      name: "John Doe",
-      street: "123 Main St",
-      city: "New York",
-      state: "NY",
-      zip: "10001",
-      country: "United States",
-    },
-    billingAddress: {
-      name: "John Doe",
-      street: "123 Main St",
-      city: "New York",
-      state: "NY",
-      zip: "10001",
-      country: "United States",
-    },
-    items: [
-      {
-        id: 1,
-        name: "Wireless Headphones",
-        sku: "WH-1000X",
-        price: 129.99,
-        quantity: 1,
-        image: "/placeholder.svg?height=80&width=80",
-      },
-      {
-        id: 2,
-        name: "Smart Watch",
-        sku: "SW-2000",
-        price: 199.99,
-        quantity: 1,
-        image: "/placeholder.svg?height=80&width=80",
-      },
-    ],
-    payment: {
-      method: "Credit Card",
-      cardNumber: "**** **** **** 1234",
-      cardType: "Visa",
-    },
-    shipping: {
-      method: "Standard Shipping",
-      cost: 10.0,
-      trackingNumber: "TRK123456789",
-      carrier: "UPS",
-    },
-    subtotal: 329.98,
-    tax: 32.99,
-    total: 372.97,
-    notes: "Customer requested gift wrapping.",
-    history: [
-      {
-        date: "2023-05-01 09:15:00",
-        status: "Order Placed",
-        note: "Order was placed by customer",
-      },
-      {
-        date: "2023-05-01 10:30:00",
-        status: "Payment Received",
-        note: "Payment was successfully processed",
-      },
-      {
-        date: "2023-05-02 14:45:00",
-        status: "Processing",
-        note: "Order is being prepared for shipping",
-      },
-    ],
-  }
-}
+import Cookies from "js-cookie"
 
 export default function AdminOrderDetail() {
   const { id } = useParams()
   const { toast } = useToast()
+  const token = Cookies.get('token')
   const [order, setOrder] = useState(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [status, setStatus] = useState("")
   const [note, setNote] = useState("")
+  const [updatingStatus, setUpdatingStatus] = useState(false)
 
-  // Fetch order data
   useEffect(() => {
-    const fetchedOrder = getOrder(id)
-    setOrder(fetchedOrder)
-    setStatus(fetchedOrder.status)
-    setIsLoading(false)
-  }, [id])
+    const fetchOrder = async () => {
+      try {
+        setLoading(true)
+        const response = await fetch(`http://127.0.0.1:8000/api/orders/${id}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          }
+        })
 
-  const handleStatusChange = (newStatus) => {
-    setStatus(newStatus)
-    toast({
-      title: "Status updated",
-      description: `Order status has been updated to ${newStatus}`,
-    })
-  }
+        if (!response.ok) {
+          throw new Error('Failed to fetch order details')
+        }
 
-  const handleAddNote = () => {
-    if (!note.trim()) return
-
-    const newHistoryEntry = {
-      date: new Date().toLocaleString(),
-      status: status,
-      note: note,
+        const data = await response.json()
+        setOrder(data)
+        setStatus(data.status)
+      } catch (err) {
+        setError(err.message)
+        toast({
+          title: "Error",
+          description: "Failed to fetch order details",
+          variant: "destructive"
+        })
+      } finally {
+        setLoading(false)
+      }
     }
 
-    setOrder({
-      ...order,
-      history: [newHistoryEntry, ...order.history],
-    })
+    fetchOrder()
+  }, [id, token, toast])
 
-    setNote("")
+  const handleStatusChange = async (newStatus) => {
+    try {
+      setUpdatingStatus(true)
+      const response = await fetch(`http://127.0.0.1:8000/api/orders/${id}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: newStatus })
+      })
 
-    toast({
-      title: "Note added",
-      description: "Your note has been added to the order history",
-    })
+      if (!response.ok) {
+        throw new Error('Failed to update order status')
+      }
+
+      setStatus(newStatus)
+      setOrder(prev => ({
+        ...prev,
+        status: newStatus,
+        history: [
+          {
+            date: new Date().toLocaleString(),
+            status: newStatus,
+            note: `Status updated to ${newStatus}`,
+          },
+          ...prev.history
+        ]
+      }))
+
+      toast({
+        title: "Success",
+        description: `Order status has been updated to ${newStatus}`,
+      })
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "Failed to update order status",
+        variant: "destructive"
+      })
+    } finally {
+      setUpdatingStatus(false)
+    }
   }
 
-  if (isLoading) {
-    return <div>Loading...</div>
+  const handleAddNote = async () => {
+    if (!note.trim()) return
+
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/api/orders/${id}/notes`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ note })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to add note')
+      }
+
+      const newHistoryEntry = {
+        date: new Date().toLocaleString(),
+        status: status,
+        note: note,
+      }
+
+      setOrder(prev => ({
+        ...prev,
+        history: [newHistoryEntry, ...prev.history],
+      }))
+
+      setNote("")
+
+      toast({
+        title: "Success",
+        description: "Note has been added to the order history",
+      })
+    } catch (err) {
+      toast({
+        title: "Error",
+        description: "Failed to add note",
+        variant: "destructive"
+      })
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="text-center">Loading order details...</div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="text-center text-red-500">Error: {error}</div>
+      </div>
+    )
+  }
+
+  if (!order) {
+    return (
+      <div className="space-y-6">
+        <div className="text-center">Order not found</div>
+      </div>
+    )
   }
 
   // Get status badge color
@@ -175,9 +203,27 @@ export default function AdminOrderDetail() {
             <p className="text-muted-foreground">Placed on {order.date}</p>
           </div>
         </div>
-        <Badge className={getStatusColor(status)}>
-          {status.charAt(0).toUpperCase() + status.slice(1)}
-        </Badge>
+        <Select
+          value={status}
+          onValueChange={handleStatusChange}
+          disabled={updatingStatus}
+        >
+          <SelectTrigger className="w-[180px]">
+            <SelectValue>
+              <Badge className={getStatusColor(status)}>
+                {status.charAt(0).toUpperCase() + status.slice(1)}
+              </Badge>
+            </SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="processing">Processing</SelectItem>
+            <SelectItem value="shipped">Shipped</SelectItem>
+            <SelectItem value="delivered">Delivered</SelectItem>
+            <SelectItem value="cancelled">Cancelled</SelectItem>
+            <SelectItem value="refunded">Refunded</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -248,6 +294,35 @@ export default function AdminOrderDetail() {
               </div>
             </div>
           </Card>
+
+          <Card className="p-6">
+            <h2 className="text-lg font-semibold mb-4">Order History</h2>
+            <div className="space-y-4">
+              <div className="flex gap-4">
+                <Textarea
+                  placeholder="Add a note..."
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                />
+                <Button onClick={handleAddNote}>Add Note</Button>
+              </div>
+              <div className="space-y-4">
+                {order.history.map((entry, index) => (
+                  <div key={index} className="flex items-start gap-4">
+                    <div className="w-24 text-sm text-muted-foreground">
+                      {entry.date}
+                    </div>
+                    <div className="flex-1">
+                      <Badge className={getStatusColor(entry.status)}>
+                        {entry.status}
+                      </Badge>
+                      <p className="mt-1 text-sm">{entry.note}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Card>
         </div>
 
         {/* Customer & Payment Info */}
@@ -284,28 +359,6 @@ export default function AdminOrderDetail() {
               <div>
                 <h3 className="font-medium">Card Number</h3>
                 <p className="text-muted-foreground">{order.payment.cardNumber}</p>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="p-6">
-            <h2 className="text-lg font-semibold mb-4">Order Status</h2>
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <Package className="h-4 w-4 text-green-500" />
-                <span>Order Placed</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Truck className="h-4 w-4 text-blue-500" />
-                <span>Processing</span>
-              </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <CheckCircle className="h-4 w-4" />
-                <span>Shipped</span>
-              </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <CheckCircle className="h-4 w-4" />
-                <span>Delivered</span>
               </div>
             </div>
           </Card>

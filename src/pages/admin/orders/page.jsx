@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Link } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -9,164 +9,207 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Search, Filter } from "lucide-react"
-
-// Mock data for orders
-const orders = [
-  {
-    id: "ORD-001",
-    customer: "John Doe",
-    email: "john.doe@example.com",
-    date: "2023-05-01",
-    status: "Delivered",
-    total: 129.99,
-    items: 2,
-  },
-  {
-    id: "ORD-002",
-    customer: "Jane Smith",
-    email: "jane.smith@example.com",
-    date: "2023-05-02",
-    status: "Processing",
-    total: 259.98,
-    items: 3,
-  },
-  {
-    id: "ORD-003",
-    customer: "Bob Johnson",
-    email: "bob.johnson@example.com",
-    date: "2023-05-03",
-    status: "Shipped",
-    total: 89.99,
-    items: 1,
-  },
-  {
-    id: "ORD-004",
-    customer: "Alice Brown",
-    email: "alice.brown@example.com",
-    date: "2023-05-04",
-    status: "Pending",
-    total: 349.97,
-    items: 4,
-  },
-  {
-    id: "ORD-005",
-    customer: "Charlie Wilson",
-    email: "charlie.wilson@example.com",
-    date: "2023-05-05",
-    status: "Delivered",
-    total: 199.99,
-    items: 2,
-  },
-  {
-    id: "ORD-006",
-    customer: "Diana Miller",
-    email: "diana.miller@example.com",
-    date: "2023-05-06",
-    status: "Cancelled",
-    total: 79.99,
-    items: 1,
-  },
-  {
-    id: "ORD-007",
-    customer: "Edward Davis",
-    email: "edward.davis@example.com",
-    date: "2023-05-07",
-    status: "Delivered",
-    total: 149.98,
-    items: 2,
-  },
-  {
-    id: "ORD-008",
-    customer: "Fiona Clark",
-    email: "fiona.clark@example.com",
-    date: "2023-05-08",
-    status: "Processing",
-    total: 299.97,
-    items: 3,
-  },
-  {
-    id: "ORD-009",
-    customer: "George White",
-    email: "george.white@example.com",
-    date: "2023-05-09",
-    status: "Refunded",
-    total: 59.99,
-    items: 1,
-  },
-  {
-    id: "ORD-010",
-    customer: "Hannah Green",
-    email: "hannah.green@example.com",
-    date: "2023-05-10",
-    status: "Shipped",
-    total: 179.98,
-    items: 2,
-  },
-]
+import { useToast } from "@/components/ui/use-toast"
+import Cookies from "js-cookie"
 
 export default function AdminOrders() {
+  const { toast } = useToast()
+  const token = Cookies.get('token')
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [orders, setOrders] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [updatingStatus, setUpdatingStatus] = useState(null)
+  const [users, setUsers] = useState({})
+
+  useEffect(() => {
+    const fetchOrders = async () => {
+      try {
+        setLoading(true)
+        const response = await fetch('http://127.0.0.1:8000/api/admin/orders', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          }
+        })
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch orders')
+        }
+
+        const data = await response.json()
+        console.log(data)
+        
+        // Fetch user information for each order
+        const userPromises = data.data.map(async (order) => {
+          try {
+            const userResponse = await fetch(`http://127.0.0.1:8000/api/me`, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+              },
+              credentials: 'include'
+            });
+            if (userResponse.ok) {
+              const userData = await userResponse.json();
+              console.log(userData.data.user.fullname)
+              return { [order.user_id]: userData.data.user.fullname };
+            }
+            return null;
+          } catch (error) {
+            console.error(`Failed to fetch user ${order.user_id}:`, error);
+            return null;
+          }
+        });
+
+        const userResults = await Promise.all(userPromises);
+        const userMap = userResults.reduce((acc, curr) => {
+          if (curr) {
+            return { ...acc, ...curr };
+          }
+          return acc;
+        }, {});
+
+        setUsers(userMap);
+        setOrders(Array.isArray(data.data) ? data.data : [])
+      } catch (err) {
+        setError(err.message)
+        toast({
+          title: "Error",
+          description: "Failed to fetch orders",
+          variant: "destructive"
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchOrders()
+  }, [token, toast])
+
+  const handleStatusChange = async (orderId, newStatus) => {
+    try {
+      setUpdatingStatus(orderId)
+      const response = await fetch(`http://127.0.0.1:8000/api/admin/orders/${orderId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({ 
+          status: newStatus,
+          _method: 'PATCH'
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to update order status')
+      }
+
+      const data = await response.json()
+      
+      // Update local state with the response data
+      setOrders(orders.map(order => 
+        order.id === orderId ? { 
+          ...order, 
+          items: order.items.map(item => ({
+            ...item,
+            product: {
+              ...item.product,
+              status: newStatus
+            }
+          }))
+        } : order
+      ))
+
+      toast({
+        title: "Success",
+        description: "Order status updated successfully",
+      })
+    } catch (err) {
+      console.error('Error updating order:', err)
+      toast({
+        title: "Error",
+        description: "Failed to update order status",
+        variant: "destructive"
+      })
+    } finally {
+      setUpdatingStatus(null)
+    }
+  }
 
   // Filter orders based on search term and status
-  const filteredOrders = orders.filter((order) => {
-    const matchesSearch =
-      order.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order.email.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredOrders = Array.isArray(orders) ? orders.filter((order) => {
+    const user = users[order.user_id];
+    const searchTermLower = searchTerm.toLowerCase();
+    
+    const matchesSearch = searchTerm === "" || 
+      String(order.id).toLowerCase().includes(searchTermLower) ||
+      (user && user.toLowerCase().includes(searchTermLower));
 
-    const matchesStatus = statusFilter === "all" || order.status === statusFilter
-
-    return matchesSearch && matchesStatus
-  })
+    const orderStatus = order.items[0]?.product?.status;
+    const matchesStatus = statusFilter === "all" || orderStatus === statusFilter.toLowerCase();
+    console.log(statusFilter.toLowerCase())
+    return matchesSearch && matchesStatus;
+  }) : [];
 
   // Get status badge color
   const getStatusColor = (status) => {
-    switch (status) {
-      case "Delivered":
+    const statusLower = status?.toLowerCase();
+    switch (statusLower) {
+      case "paid":
         return "bg-green-100 text-green-800"
-      case "Processing":
+      case "shipped":
         return "bg-blue-100 text-blue-800"
-      case "Shipped":
-        return "bg-purple-100 text-purple-800"
-      case "Pending":
+      case "pending":
         return "bg-yellow-100 text-yellow-800"
-      case "Cancelled":
+      case "cancelled":
         return "bg-red-100 text-red-800"
-      case "Refunded":
-        return "bg-gray-100 text-gray-800"
       default:
         return "bg-gray-100 text-gray-800"
     }
+  }
+
+  // Format price to VND
+  const formatPrice = (price) => {
+    return new Intl.NumberFormat('vi-VN', {
+      style: 'currency',
+      currency: 'VND'
+    }).format(price);
+  }
+
+  // Format status text
+  const formatStatus = (status) => {
+    if (!status) return 'Pending';
+    return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="text-center">Loading orders...</div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-4">
+        <div className="text-center text-red-500">Error: {error}</div>
+      </div>
+    )
   }
 
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Orders</h1>
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-            <Input
-              placeholder="Search orders..."
-              className="pl-10 w-[200px]"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Filter by status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="processing">Processing</SelectItem>
-              <SelectItem value="shipped">Shipped</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
       </div>
 
       <Card>
@@ -179,31 +222,55 @@ export default function AdminOrders() {
               <TableHead>Items</TableHead>
               <TableHead>Total</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredOrders.map((order) => (
-              <TableRow key={order.id}>
-                <TableCell>#{order.id}</TableCell>
-                <TableCell>{order.customer}</TableCell>
-                <TableCell>{order.date}</TableCell>
-                <TableCell>{order.items}</TableCell>
-                <TableCell>${order.total.toFixed(2)}</TableCell>
-                <TableCell>
-                  <Badge className={getStatusColor(order.status)}>
-                    {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right">
-                  <Link to={`/admin/orders/${order.id}`}>
-                    <Button variant="ghost" size="sm">
-                      View Details
-                    </Button>
-                  </Link>
+            {orders.length > 0 ? (
+              orders.map((order) => (
+                <TableRow key={order.id}>
+                  <TableCell>#{order.id}</TableCell>
+                  <TableCell>
+                    {users[order.user_id] ? (
+                      <div>
+                        <div className="font-medium">{users[order.user_id]}</div>
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">Loading...</span>
+                    )}
+                  </TableCell>
+                  <TableCell>{new Date(order.created_at).toLocaleDateString()}</TableCell>
+                  <TableCell>{order.items.length || 0}</TableCell>
+                  <TableCell>{formatPrice(order.total_price)}</TableCell>
+                  <TableCell>
+                    <Select
+                      value={order.items[0].status || 'pending'}
+                      onValueChange={(value) => handleStatusChange(order.id, value)}
+                      disabled={updatingStatus === order.id}
+                    >
+                      <SelectTrigger className="w-[130px]">
+                        <SelectValue>
+                          <Badge className={getStatusColor(order.items[0].status)}>
+                            {formatStatus(order.items[0].status)}
+                          </Badge>
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="paid">Paid</SelectItem>
+                        <SelectItem value="shipped">Shipped</SelectItem>
+                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center py-4">
+                  No orders found
                 </TableCell>
               </TableRow>
-            ))}
+            )}
           </TableBody>
         </Table>
       </Card>

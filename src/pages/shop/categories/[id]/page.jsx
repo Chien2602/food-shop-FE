@@ -15,188 +15,178 @@ import { FadeIn } from "@/components/ui/fade-in"
 import { ProductCard } from "@/components/product-card"
 import { SkeletonCard } from "@/components/ui/skeleton-card"
 import { Card } from '../../../../components/ui/card'
-
-// Mock data for categories
-const categories = [
-  {
-    id: 1,
-    name: "Electronics",
-    image: "/placeholder.svg?height=300&width=300",
-    description: "Discover the latest gadgets and electronic devices for your home and office.",
-  },
-  {
-    id: 2,
-    name: "Clothing",
-    image: "/placeholder.svg?height=300&width=300",
-    description: "Explore our collection of trendy and comfortable clothing for all seasons.",
-  },
-  {
-    id: 3,
-    name: "Footwear",
-    image: "/placeholder.svg?height=300&width=300",
-    description: "Step into style with our range of shoes for every occasion.",
-  },
-  {
-    id: 4,
-    name: "Accessories",
-    image: "/placeholder.svg?height=300&width=300",
-    description: "Complete your look with our fashionable accessories and jewelry.",
-  },
-]
-
-// Mock data for products
-const allProducts = [
-  {
-    id: 1,
-    name: "Wireless Headphones",
-    price: 129.99,
-    image: "/placeholder.svg?height=300&width=300",
-    category: "Electronics",
-    categoryId: 1,
-    isNew: true,
-  },
-  {
-    id: 2,
-    name: "Smart Watch",
-    price: 199.99,
-    image: "/placeholder.svg?height=300&width=300",
-    category: "Electronics",
-    categoryId: 1,
-    isNew: true,
-  },
-  {
-    id: 5,
-    name: "Smartphone",
-    price: 699.99,
-    image: "/placeholder.svg?height=300&width=300",
-    category: "Electronics",
-    categoryId: 1,
-    isNew: true,
-  },
-  {
-    id: 6,
-    name: "Laptop",
-    price: 1299.99,
-    image: "/placeholder.svg?height=300&width=300",
-    category: "Electronics",
-    categoryId: 1,
-    isNew: false,
-  },
-  {
-    id: 7,
-    name: "T-Shirt",
-    price: 24.99,
-    image: "/placeholder.svg?height=300&width=300",
-    category: "Clothing",
-    categoryId: 2,
-    isNew: false,
-  },
-  {
-    id: 8,
-    name: "Jeans",
-    price: 49.99,
-    image: "/placeholder.svg?height=300&width=300",
-    category: "Clothing",
-    categoryId: 2,
-    isNew: false,
-  },
-  {
-    id: 3,
-    name: "Running Shoes",
-    price: 89.99,
-    image: "/placeholder.svg?height=300&width=300",
-    category: "Footwear",
-    categoryId: 3,
-    isNew: false,
-  },
-  {
-    id: 4,
-    name: "Backpack",
-    price: 59.99,
-    image: "/placeholder.svg?height=300&width=300",
-    category: "Accessories",
-    categoryId: 4,
-    isNew: false,
-  },
-]
+import { useToast } from "@/components/ui/use-toast"
+import { usePlayer } from "@/product-provider"
+import Cookies from "js-cookie"
+import { useNavigate } from "react-router-dom"
 
 export default function ShopCategoryDetail() {
   const { id } = useParams()
+  const { toast } = useToast()
+  const [category, setCategory] = useState(null)
+  const [products, setProducts] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [addingToCart, setAddingToCart] = useState({})
+  const token = Cookies.get('token')
+  const { setCurrentProduct } = usePlayer()
+  const navigate = useNavigate()
+  useEffect(() => {
+    const fetchCategoryAndProducts = async () => {
+      try {
+        setLoading(true)
+        setError(null)
 
-  // Mock data - replace with actual API call
-  const category = {
-    id,
-    name: "Electronics",
-    description: "Browse our collection of electronic devices and accessories.",
-    products: [
-      {
-        id: 1,
-        name: "Wireless Headphones",
-        price: 99.99,
-        image: "https://placehold.co/400x400",
-        rating: 4.5,
-        reviews: 128
-      },
-      {
-        id: 2,
-        name: "Smart Watch",
-        price: 199.99,
-        image: "https://placehold.co/400x400",
-        rating: 4.3,
-        reviews: 89
-      },
-      {
-        id: 3,
-        name: "Bluetooth Speaker",
-        price: 79.99,
-        image: "https://placehold.co/400x400",
-        rating: 4.7,
-        reviews: 256
-      },
-      {
-        id: 4,
-        name: "Power Bank",
-        price: 49.99,
-        image: "https://placehold.co/400x400",
-        rating: 4.2,
-        reviews: 64
+        // Fetch category details
+        const categoryResponse = await fetch(`http://127.0.0.1:8000/api/categories/${id}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          }
+        })
+        if (!categoryResponse.ok) {
+          throw new Error('Failed to fetch category')
+        }
+        const categoryData = await categoryResponse.json()
+        setCategory(categoryData.data)
+
+        // Fetch products in this category
+        const productsResponse = await fetch(`http://127.0.0.1:8000/api/categories/${id}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          }
+        })
+        if (!productsResponse.ok) {
+          throw new Error('Failed to fetch products')
+        }
+        const productsData = await productsResponse.json()
+        console.log(productsData)
+        setProducts(productsData.data.products || [])
+      } catch (err) {
+        console.error('Error fetching data:', err)
+        setError(err.message)
+        toast({
+          title: "Error",
+          description: "Failed to load category data",
+          variant: "destructive"
+        })
+      } finally {
+        setLoading(false)
       }
-    ]
+    }
+
+    if (id) {
+      fetchCategoryAndProducts()
+    }
+  }, [id, token, toast])
+
+  const handleAddToCart = async (productId) => {
+    try {
+      setAddingToCart(prev => ({ ...prev, [productId]: true }))
+      
+      const response = await fetch('http://127.0.0.1:8000/api/cart/items', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          product_id: productId,
+          quantity: 1,
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || 'Failed to add to cart')
+      }
+
+      toast({
+        title: "Success",
+        description: "Product added to cart successfully",
+      })
+    } catch (err) {
+      console.error('Error adding to cart:', err)
+      toast({
+        title: "Error",
+        description: err.message || "Failed to add product to cart",
+        variant: "destructive"
+      })
+    } finally {
+      setAddingToCart(prev => ({ ...prev, [productId]: false }))
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="container mx-auto py-8 px-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[...Array(8)].map((_, index) => (
+            <SkeletonCard key={index} />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !category) {
+    return (
+      <div className="container mx-auto py-8 px-4">
+        <div className="text-center text-red-500">
+          {error || "Category not found"}
+        </div>
+      </div>
+    )
+  }
+
+  const handleProductClick = (product) => {
+    setCurrentProduct(product)
+    navigate(`/shop/products/${product.id}`)
   }
 
   return (
     <div className="container mx-auto py-8 px-4">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold">{category.name}</h1>
+        <h1 className="text-3xl font-bold">{category.title}</h1>
         <p className="text-muted-foreground mt-2">{category.description}</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {category.products.map((product) => (
-          <Card key={product.id} className="overflow-hidden">
+        {products.map((product) => (
+          <Card key={product.id} className="overflow-hidden" onClick={() => handleProductClick(product)}>
             <div className="aspect-square">
               <img
-                src={product.image}
-                alt={product.name}
+                src={product.thumbnail || '/placeholder.png'}
+                alt={product.title}
                 className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.target.src = '/placeholder.png'
+                }}
               />
             </div>
             <div className="p-4 space-y-2">
-              <h3 className="font-semibold">{product.name}</h3>
+              <h3 className="font-semibold">{product.title}</h3>
               <div className="flex items-center justify-between">
-                <div className="text-lg font-bold">${product.price}</div>
-                <div className="flex items-center gap-1">
-                  <span className="text-yellow-400">★</span>
-                  <span>{product.rating}</span>
+                <div className="text-lg font-bold">
+                  {new Intl.NumberFormat('vi-VN', {
+                    style: 'currency',
+                    currency: 'VND'
+                  }).format(product.price || 0)}
                 </div>
+                {product.discount > 0 && (
+                  <div className="text-sm text-red-500">
+                    -{product.discount}%
+                  </div>
+                )}
               </div>
               <div className="flex gap-2">
-                <Button className="flex-1">
+                <Button 
+                  className="flex-1"
+                  onClick={() => handleAddToCart(product.id)}
+                  disabled={addingToCart[product.id]}
+                >
                   <ShoppingCart className="mr-2 h-4 w-4" />
-                  Add to Cart
-                </Button>
-                <Button variant="outline" size="icon">
-                  <Heart className="h-4 w-4" />
+                  {addingToCart[product.id] ? 'Adding...' : 'Add to Cart'}
                 </Button>
               </div>
             </div>

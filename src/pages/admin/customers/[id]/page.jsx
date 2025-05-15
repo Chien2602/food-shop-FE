@@ -12,71 +12,82 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ArrowLeft, Mail, MapPin, Phone, ShoppingBag, User, Calendar, DollarSign, Package, CreditCard, ChevronRight, Edit, Trash2, MoreHorizontal } from "lucide-react"
 import { ScrollReveal } from "@/components/ui/scroll-reveal"
 import { FadeIn } from "@/components/ui/fade-in"
-
-// Mock customer data
-const getCustomer = (id) => {
-  return {
-    id: Number.parseInt(id),
-    name: "John Doe",
-    email: "john@example.com",
-    phone: "+1 234 567 890",
-    address: "123 Main St, New York, NY 10001",
-    joined: "2024-01-15",
-    status: "active",
-    orders: [
-      {
-        id: "ORD001",
-        date: "2024-03-15",
-        items: 3,
-        total: 125.00,
-        status: "completed",
-      },
-      {
-        id: "ORD002",
-        date: "2024-03-10",
-        items: 2,
-        total: 89.50,
-        status: "completed",
-      },
-      {
-        id: "ORD003",
-        date: "2024-03-05",
-        items: 1,
-        total: 45.99,
-        status: "processing",
-      },
-    ],
-    totalOrders: 12,
-    totalSpent: 1250.99,
-    averageOrderValue: 104.25,
-    lastOrder: "2024-03-15",
-    paymentMethods: [
-      {
-        type: "credit_card",
-        last4: "4242",
-        expiry: "12/25",
-        default: true,
-      },
-      {
-        type: "paypal",
-        email: "john@example.com",
-        default: false,
-      },
-    ],
-  }
-}
+import { useToast } from "@/components/ui/use-toast"
+import Cookies from "js-cookie"
 
 export default function AdminCustomerDetail() {
   const { id } = useParams()
+  const { toast } = useToast()
+  const token = Cookies.get('token')
   const [customer, setCustomer] = useState(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
-  // Fetch customer data
   useEffect(() => {
-    const fetchedCustomer = getCustomer(id)
-    setCustomer(fetchedCustomer)
-    setIsLoading(false)
-  }, [id])
+    const fetchCustomer = async () => {
+      try {
+        setLoading(true)
+        const response = await fetch(`http://127.0.0.1:8000/api/admin/users/${id}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          }
+        })
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch customer details')
+        }
+
+        const data = await response.json()
+        setCustomer(data)
+      } catch (err) {
+        setError(err.message)
+        toast({
+          title: "Error",
+          description: "Failed to fetch customer details",
+          variant: "destructive"
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchCustomer()
+  }, [id, token, toast])
+
+  const handleDeleteCustomer = async () => {
+    if (!window.confirm('Are you sure you want to delete this customer?')) {
+      return
+    }
+
+    try {
+      const response = await fetch(`http://127.0.0.1:8000/api/admin/users/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to delete customer')
+      }
+
+      toast({
+        title: "Success",
+        description: "Customer deleted successfully",
+      })
+
+      // Redirect to customers list
+      window.location.href = '/admin/customers'
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete customer",
+        variant: "destructive"
+      })
+    }
+  }
 
   // Get status badge color
   const getStatusColor = (status) => {
@@ -103,8 +114,28 @@ export default function AdminCustomerDetail() {
     }
   }
 
-  if (isLoading) {
-    return <div>Loading...</div>
+  if (loading) {
+    return (
+      <div className="container mx-auto py-8 px-4">
+        <div className="text-center">Loading customer details...</div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="container mx-auto py-8 px-4">
+        <div className="text-center text-red-500">Error: {error}</div>
+      </div>
+    )
+  }
+
+  if (!customer) {
+    return (
+      <div className="container mx-auto py-8 px-4">
+        <div className="text-center">Customer not found</div>
+      </div>
+    )
   }
 
   return (
@@ -129,7 +160,7 @@ export default function AdminCustomerDetail() {
               <Edit className="h-4 w-4 mr-2" />
               Edit Customer
             </Button>
-            <Button variant="destructive">
+            <Button variant="destructive" onClick={handleDeleteCustomer}>
               <Trash2 className="h-4 w-4 mr-2" />
               Delete Customer
             </Button>
